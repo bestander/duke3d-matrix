@@ -372,10 +372,14 @@ void DG_DrawFrame()
       }
     }
   }
+  // TODO if --time passed
   time(&rawtime);
   info = localtime(&rawtime);
-  strftime(text_buffer, 80, "%H:%M:%S", info);
+  strftime(text_buffer, 80, "%H:%M", info);
   draw_text(offscreen_canvas, font, 0, 64, 255, 255, 0, text_buffer, 1);
+  // TODO if meteo-source-key is passed
+  // TODO schedule meteo to be queries once an hour
+
 
   offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
   handleKeyInput();

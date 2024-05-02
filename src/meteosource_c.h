@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-	void meteosource_init(void);
+void meteosource_init(void);
 
 #ifdef  __cplusplus
 }
