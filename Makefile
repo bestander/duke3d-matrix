@@ -17,25 +17,39 @@ RGB_LIBRARY_INCLUDE=$(RGB_LIB_DISTRIBUTION)/include
 SDL_LIBS = `sdl2-config --cflags --libs` -lSDL2_mixer
 LDFLAGS+=-L$(RGB_LIBDIR) -l$(RGB_LIBRARY_NAME) -lrt -lm -lc -lpthread $(SDL_LIBS)
 
+METEOSOURCE_DIR := ./libs/meteosource
+METEOSOURCE_INCLUDE := $(METEOSOURCE_DIR)/src
+METEOSOURCE_ARTIFACT := $(METEOSOURCE_INCLUDE)/Meteosource.o
+METEOSOURCE_LIBS = -lcurl -ljsoncpp
+
 SRCS := $(shell find $(SRC_DIRS) -name '*.cpp' -or -name '*.c')
 OBJS += $(SRCS:%=$(BUILD_DIR)/%.o)
 
-INC_DIRS := $(shell find $(SRC_DIRS) -type d) $(DOOMGENERIC_DIR) $(RGB_LIBRARY_INCLUDE)
+INC_DIRS := $(shell find $(SRC_DIRS) -type d) $(DOOMGENERIC_DIR) $(RGB_LIBRARY_INCLUDE) $(METEOSOURCE_INCLUDE)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS)) $(SDL_LIBS)
 
 CC = gcc
+CXX = g++
 CFLAGS = -DFEATURE_SOUND $(SDL_CFLAGS) -Wall
+CXXFLAGS = -Wall -std=c++11  $(INC_FLAGS)
 CPPFLAGS := $(INC_FLAGS) -MMD -MP
 
-$(TARGET_EXEC): $(OBJS) $(RGB_LIBRARY)
-	$(CXX) $(shell find $(BUILD_DIR) -name '*.o') -o $@ $(LDFLAGS)
+$(TARGET_EXEC): $(OBJS) $(RGB_LIBRARY) $(METEOSOURCE_ARTIFACT)
+	$(CXX) $(shell find $(BUILD_DIR) -name '*.o') $(shell find $(METEOSOURCE_INCLUDE) -name '*.o') -o $@ $(LDFLAGS) $(METEOSOURCE_LIBS)
 
 $(RGB_LIBRARY): FORCE
 	$(MAKE) -C $(RGB_LIBDIR)
 
+$(METEOSOURCE_ARTIFACT): FORCE
+	$(MAKE) -C $(METEOSOURCE_DIR)
+
 $(BUILD_DIR)/%.c.o: %.c
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@ $(LIBS)
+
+$(BUILD_DIR)/%.cpp.o: %.cpp
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 .PHONY: clean
 clean:

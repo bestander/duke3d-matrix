@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <signal.h>
 #include <SDL.h>
+#include <time.h>
+#include "meteosource_c.h"
 
 SDL_Surface *surface = NULL;
 SDL_Renderer *renderer = NULL;
@@ -18,6 +20,7 @@ struct LedCanvas *offscreen_canvas;
 time_t rawtime;
 struct tm *info;
 char text_buffer[80];
+
 
 /*
 dimensions for the drawing surface which may be
@@ -269,6 +272,8 @@ int main(int argc, char **argv)
   struct RGBLedMatrixOptions options;
 
   memset(&options, 0, sizeof(options));
+
+  meteosource_init();
 
   matrix = led_matrix_create_from_options(&options, &argc, &argv);
   if (matrix == NULL)

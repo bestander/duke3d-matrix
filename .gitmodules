@@ -10,3 +10,6 @@
 [submodule "libs/SDL_mixer"]
 	path = libs/SDL_mixer
 	url = https://github.com/libsdl-org/SDL_mixer.git
+[submodule "libs/meteosource"]
+	path = libs/meteosource
+	url = https://github.com/Meteosource/meteosource_cpp.git
