@@ -10,7 +10,7 @@ This is an update to the upstream project with the following additions:
 - Preconfigure for double 64x32 screen
 - Gamepad support
 - Sleep due to gamepad inactivity
-- Current time and weather prognosis is displayed under the doom screen
+- Current time and weather forecast is displayed under the game screen
 
 **Made possible thanks to these libraries:**
 - [doomgeneric](https://github.com/ozkl/doomgeneric)

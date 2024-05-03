@@ -1,10 +1,12 @@
 #include "doomgeneric.h"
 #include "led-matrix-c.h"
 #include "doomkeys.h"
+#include <time.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <pthread.h>
 #include <SDL.h>
 #include <time.h>
 #include "meteosource_c.h"
@@ -31,6 +33,10 @@ less than the matrix dimensions to account for aspect ratio
 */
 int surfaceWidth, surfaceHeight;
 int matrixWidth, matrixHeight;
+bool is_game_sleeping = false;
+int sleep_timeout = 0;
+int refresh_weather_timeout = 0;
+clock_t last_activity_time;
 
 #define KEYQUEUE_SIZE 16
 
@@ -188,6 +194,8 @@ static void handleKeyInput()
       atexit(SDL_Quit);
       exit(1);
     }
+    is_game_sleeping = false;
+    last_activity_time = clock();
     if (e.type == SDL_JOYAXISMOTION)
     {
       if (e.jaxis.axis == 0)
@@ -272,15 +280,85 @@ void catch_int(int sig_num)
 
 void getWeather(char *metsource_key, char *metsource_place_id)
 {
-  if (metsource_key && metsource_place_id)
+  if (meteosource)
   {
-    meteosource = meteosource_init(metsource_key, "free");
     char *sections = "hourly";
     char *timezone = "UTC";
     char *language = "en";
     char *units = "metric";
     temperatureForecast = get_min_max_temparature_forecast(meteosource, metsource_place_id, sections, timezone, language, units);
   }
+}
+
+void draw_frame()
+{
+  uint32_t *pix = surface->pixels;
+  for (int y = 0; y < matrixHeight; ++y)
+  {
+    for (int x = 0; x < matrixWidth; ++x)
+    {
+      if (x < surfaceWidth && y < surfaceHeight)
+      {
+        if (!is_game_sleeping) {
+          uint8_t r = *pix >> 16;
+          uint8_t g = *pix >> 8;
+          uint8_t b = *pix;
+          led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
+        } else {
+          led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
+        }
+        pix++;
+      }
+      else
+      {
+        led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
+      }
+    }
+  }
+  time(&rawtime);
+  info = localtime(&rawtime);
+  char time_buffer[20];
+  strftime(time_buffer, 20, "%H:%M", info);
+  draw_text(offscreen_canvas, font, 0, 56, 255, 255, 0, time_buffer, 1);
+
+  if (!temperatureForecast.isError)
+  {
+    char temp_message[20];
+    sprintf(temp_message, "%.1f° - %.1f°", temperatureForecast.min, temperatureForecast.max);
+    draw_text(offscreen_canvas, font, 0, 64, 255, 255, 0, temp_message, 1);
+  }
+
+  offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
+  handleKeyInput();
+}
+
+void *refresh_weather_and_restart_doom(void *arg)
+{
+  while (true)
+  {
+    printf("Timer thread: calling refresh_weather_and_restart_doom\n");
+    getWeather(metsource_key, metsource_place_id);
+    is_game_sleeping = false;
+    sleep(refresh_weather_timeout);
+  }
+  return NULL;
+}
+
+void *put_doom_to_sleep(void *arg)
+{
+  while (true)
+  {
+    printf("Timer thread: calling put_doom_to_sleep\n");
+    if (!is_game_sleeping) {
+      clock_t now_time = clock();
+      int elapsed_sec = (int)(now_time - last_activity_time) / CLOCKS_PER_SEC;
+      if (elapsed_sec >= sleep_timeout) {
+        is_game_sleeping = true;
+      }
+    }
+    sleep(sleep_timeout);
+  }
+  return NULL;
 }
 
 int main(int argc, char **argv)
@@ -291,6 +369,8 @@ int main(int argc, char **argv)
 
   char *metsource_key_arg = "--metsource_key=";
   char *metsource_location_arg = "--metsource_location=";
+  char *sleep_timeout_arg = "--sleep_timeout_sec=";
+  char *refresh_timer_arg = "--refresh_weather_timer_sec=";
   int i;
   for (i = 1; i < argc; i++)
   {
@@ -304,10 +384,44 @@ int main(int argc, char **argv)
       metsource_place_id = argv[i] + strlen(metsource_location_arg);
       printf("Metsource place: %s\n", metsource_place_id);
     }
+    else if (strncmp(argv[i], sleep_timeout_arg, strlen(sleep_timeout_arg)) == 0)
+    {
+      sleep_timeout = atoi(argv[i] + strlen(sleep_timeout_arg));
+      printf("Sleep timoeut: %d\n", sleep_timeout);
+    }
+    else if (strncmp(argv[i], refresh_timer_arg, strlen(refresh_timer_arg)) == 0)
+    {
+      refresh_weather_timeout = atoi(argv[i] + strlen(refresh_timer_arg));
+      printf("Data refresh timoeut: %d\n", refresh_weather_timeout);
+    }
   }
+  if (metsource_key && metsource_place_id)
+  {
+    meteosource = meteosource_init(metsource_key, "free");
+  }
+
+  pthread_t refresh_thread_id;
+  if (refresh_weather_timeout) {
+    int err = pthread_create(&refresh_thread_id, NULL, refresh_weather_and_restart_doom, NULL);
+    if (err != 0)
+    {
+      printf("Error creating timer thread: %d\n", err);
+      return 1;
+    }
+  } 
+  pthread_t sleep_thread_id;
+  if (sleep_timeout) {
+    int err = pthread_create(&sleep_thread_id, NULL, put_doom_to_sleep, NULL);
+    if (err != 0)
+    {
+      printf("Error creating timer thread: %d\n", err);
+      return 1;
+    }
+  } 
+
   temperatureForecast.isError = true;
-  // TODO call once na hour
-  getWeather(metsource_key, metsource_place_id);
+
+  last_activity_time = clock();
 
   matrix = led_matrix_create_from_options(&options, &argc, &argv);
   if (matrix == NULL)
@@ -321,10 +435,14 @@ int main(int argc, char **argv)
 
   doomgeneric_Create(argc, argv);
   signal(SIGINT, catch_int);
-  // TODO pause on inactivity
   while (true)
   {
-    doomgeneric_Tick();
+    if (!is_game_sleeping) {
+      doomgeneric_Tick();
+    } else {
+      // TODO mute sound
+      draw_frame();
+    }
   }
 
   return 0;
@@ -390,39 +508,5 @@ void DG_DrawFrame()
   SDL_RenderClear(renderer);
   SDL_RenderCopy(renderer, texture, NULL, NULL);
   SDL_RenderPresent(renderer);
-
-  uint32_t *pix = surface->pixels;
-  for (int y = 0; y < matrixHeight; ++y)
-  {
-    for (int x = 0; x < matrixWidth; ++x)
-    {
-      if (x < surfaceWidth && y < surfaceHeight)
-      {
-        uint8_t r = *pix >> 16;
-        uint8_t g = *pix >> 8;
-        uint8_t b = *pix;
-        led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
-        pix++;
-      }
-      else
-      {
-        led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
-      }
-    }
-  }
-  time(&rawtime);
-  info = localtime(&rawtime);
-  char time_buffer[20];
-  strftime(time_buffer, 20, "%H:%M", info);
-  draw_text(offscreen_canvas, font, 0, 56, 255, 255, 0, time_buffer, 1);
-
-  if (!temperatureForecast.isError)
-  {
-    char temp_message[20];
-    sprintf(temp_message, "%.1f° - %.1f°", temperatureForecast.min, temperatureForecast.max);
-    draw_text(offscreen_canvas, font, 0, 64, 255, 255, 0, temp_message, 1);
-  }
-
-  offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
-  handleKeyInput();
+  draw_frame();
 }
