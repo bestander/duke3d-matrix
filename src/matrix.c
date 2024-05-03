@@ -19,8 +19,11 @@ struct LedFont *font;
 struct LedCanvas *offscreen_canvas;
 time_t rawtime;
 struct tm *info;
-char text_buffer[80];
 
+Meteosource *meteosource;
+MinMaxTemperature temperatureForecast;
+char *metsource_key = NULL;
+char *metsource_place_id = NULL;
 
 /*
 dimensions for the drawing surface which may be
@@ -267,13 +270,44 @@ void catch_int(int sig_num)
   exit(0);
 }
 
+void getWeather(char *metsource_key, char *metsource_place_id)
+{
+  if (metsource_key && metsource_place_id)
+  {
+    meteosource = meteosource_init(metsource_key, "free");
+    char *sections = "hourly";
+    char *timezone = "UTC";
+    char *language = "en";
+    char *units = "metric";
+    temperatureForecast = get_min_max_temparature_forecast(meteosource, metsource_place_id, sections, timezone, language, units);
+  }
+}
+
 int main(int argc, char **argv)
 {
   struct RGBLedMatrixOptions options;
 
   memset(&options, 0, sizeof(options));
 
-  meteosource_init();
+  char *metsource_key_arg = "--metsource_key=";
+  char *metsource_location_arg = "--metsource_location=";
+  int i;
+  for (i = 1; i < argc; i++)
+  {
+    if (strncmp(argv[i], metsource_key_arg, strlen(metsource_key_arg)) == 0)
+    {
+      metsource_key = argv[i] + strlen(metsource_key_arg);
+      printf("Metsource key: %s\n", metsource_key);
+    }
+    else if (strncmp(argv[i], metsource_location_arg, strlen(metsource_location_arg)) == 0)
+    {
+      metsource_place_id = argv[i] + strlen(metsource_location_arg);
+      printf("Metsource place: %s\n", metsource_place_id);
+    }
+  }
+  temperatureForecast.isError = true;
+  // TODO call once na hour
+  getWeather(metsource_key, metsource_place_id);
 
   matrix = led_matrix_create_from_options(&options, &argc, &argv);
   if (matrix == NULL)
@@ -287,6 +321,7 @@ int main(int argc, char **argv)
 
   doomgeneric_Create(argc, argv);
   signal(SIGINT, catch_int);
+  // TODO pause on inactivity
   while (true)
   {
     doomgeneric_Tick();
@@ -361,25 +396,32 @@ void DG_DrawFrame()
   {
     for (int x = 0; x < matrixWidth; ++x)
     {
-      if (x < surfaceWidth && y < surfaceHeight) {
+      if (x < surfaceWidth && y < surfaceHeight)
+      {
         uint8_t r = *pix >> 16;
         uint8_t g = *pix >> 8;
         uint8_t b = *pix;
         led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
         pix++;
-      } else {
+      }
+      else
+      {
         led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
       }
     }
   }
-  // TODO if --time passed
   time(&rawtime);
   info = localtime(&rawtime);
-  strftime(text_buffer, 80, "%H:%M", info);
-  draw_text(offscreen_canvas, font, 0, 64, 255, 255, 0, text_buffer, 1);
-  // TODO if meteo-source-key is passed
-  // TODO schedule meteo to be queries once an hour
+  char time_buffer[20];
+  strftime(time_buffer, 20, "%H:%M", info);
+  draw_text(offscreen_canvas, font, 0, 56, 255, 255, 0, time_buffer, 1);
 
+  if (!temperatureForecast.isError)
+  {
+    char temp_message[20];
+    sprintf(temp_message, "%.1f° - %.1f°", temperatureForecast.min, temperatureForecast.max);
+    draw_text(offscreen_canvas, font, 0, 64, 255, 255, 0, temp_message, 1);
+  }
 
   offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
   handleKeyInput();

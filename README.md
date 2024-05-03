@@ -1,7 +1,16 @@
 # doom-matrix: picture frame
 
+<GIF HERE>
 
 Runs Doom on LED matrices as wall frame connected to a Raspberry Pi.
+
+## What's in the fork
+
+This is an update to the upstream project with the following additions:
+- Preconfigure for double 64x32 screen
+- Gamepad support
+- Sleep due to gamepad inactivity
+- Current time and weather prognosis is displayed under the doom screen
 
 **Made possible thanks to these libraries:**
 - [doomgeneric](https://github.com/ozkl/doomgeneric)
@@ -14,6 +23,7 @@ Runs Doom on LED matrices as wall frame connected to a Raspberry Pi.
 - [Adafruit RGB Matrix Bonnet](https://www.adafruit.com/product/3211)
 - [5V 4A Power Supply](https://www.adafruit.com/product/1466)
 - Raspberry Pi
+- Any USB gamepad
 - 3D printer
 
 ## Setup tooling and libraries
@@ -59,6 +69,13 @@ make install (as root)
 
 ## Running
 
-The binary accepts arguments for both [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix/tree/master) and [doomgeneric](https://github.com/ozkl/doomgeneric), e.g.:
+The binary accepts arguments for both [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix/tree/master) and [doomgeneric](https://github.com/ozkl/doomgeneric), all the necessary params to run it on a double LED matrix on a Raspberry Pi3 are in script `run.sh`.
 
-`./run.sh`
+If you want for the board to also show temperature forecast from [Meteosource](https://github.com/Meteosource/meteosource_cpp) you need to register on the website (free) and generate an API token and pass it to the run.sh script:
+
+`./run.sh --metsource_key=my-api-key --metsource_location=nocatee-7315235`
+
+
+## Autostart
+
+TODO

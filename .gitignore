@@ -3,3 +3,4 @@ build/
 .DS_Store
 doom_matrix
 .vscode
+myrun.sh
