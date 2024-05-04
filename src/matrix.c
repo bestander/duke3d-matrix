@@ -195,6 +195,7 @@ static void handleKeyInput()
       exit(1);
     }
     is_game_sleeping = false;
+    S_SetMusicVolume(127);
     last_activity_time = clock();
     if (e.type == SDL_JOYAXISMOTION)
     {
@@ -339,6 +340,7 @@ void *refresh_weather_and_restart_doom(void *arg)
     printf("Timer thread: calling refresh_weather_and_restart_doom\n");
     getWeather(metsource_key, metsource_place_id);
     is_game_sleeping = false;
+    S_SetMusicVolume(127);
     sleep(refresh_weather_timeout);
   }
   return NULL;
@@ -354,9 +356,14 @@ void *put_doom_to_sleep(void *arg)
       int elapsed_sec = (int)(now_time - last_activity_time) / CLOCKS_PER_SEC;
       if (elapsed_sec >= sleep_timeout) {
         is_game_sleeping = true;
+        S_SetMusicVolume(0);
+        sleep(sleep_timeout);
+      } else {
+        sleep(sleep_timeout - elapsed_sec);
       }
+    } else {
+      sleep(sleep_timeout);
     }
-    sleep(sleep_timeout);
   }
   return NULL;
 }
@@ -440,7 +447,6 @@ int main(int argc, char **argv)
     if (!is_game_sleeping) {
       doomgeneric_Tick();
     } else {
-      // TODO mute sound
       draw_frame();
     }
   }
@@ -476,6 +482,7 @@ void DG_Init()
       printf("Couldn't open Joystick 0\n");
     }
   }
+  S_SetMusicVolume(127);
 
   window = SDL_CreateWindow("DOOM",
                             SDL_WINDOWPOS_UNDEFINED,

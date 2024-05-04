@@ -73,9 +73,9 @@ The binary accepts arguments for both [rpi-rgb-led-matrix](https://github.com/hz
 
 If you want for the board to also show temperature forecast from [Meteosource](https://github.com/Meteosource/meteosource_cpp) you need to register on the website (free) and generate an API token and pass it to the run.sh script:
 
-`./run.sh --metsource_key=my-api-key --metsource_location=nocatee-7315235`
+`./run.sh --metsource_key=<my-api-key> --metsource_location=nocatee-7315235 --refresh_weather_timer_sec=3600`
 
+If you don't want the game to play nonstop you can pass the following parameter to pause it if there is no gamepad activity.
+It will automatically wake up on any gamepad button click and when weather is refreshed. 
 
-## Autostart
-
-TODO
+`./run.sh --sleep_timeout_sec=300`
