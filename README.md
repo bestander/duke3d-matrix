@@ -1,6 +1,6 @@
 # doom-matrix: picture frame
 
-<GIF HERE>
+![Assembeld picture](img/pic.jpg)
 
 Runs Doom on LED matrices as wall frame connected to a Raspberry Pi.
 
