@@ -23,7 +23,7 @@ time_t rawtime;
 struct tm *info;
 
 Meteosource *meteosource;
-MinMaxTemperature temperatureForecast;
+MinMaxTemperature temperature_forecast;
 char *metsource_key = NULL;
 char *metsource_place_id = NULL;
 
@@ -31,15 +31,14 @@ char *metsource_place_id = NULL;
 dimensions for the drawing surface which may be
 less than the matrix dimensions to account for aspect ratio
 */
-int surfaceWidth, surfaceHeight;
-int matrixWidth, matrixHeight;
+int surface_width, surface_height;
+int matrix_width, matrix_height;
 bool is_game_sleeping = false;
 int sleep_timeout = 0;
 int refresh_weather_timeout = 0;
 clock_t last_activity_time;
 
 #define KEYQUEUE_SIZE 16
-
 static unsigned short s_KeyQueue[KEYQUEUE_SIZE];
 static unsigned int s_KeyQueueWriteIndex = 0;
 static unsigned int s_KeyQueueReadIndex = 0;
@@ -182,6 +181,18 @@ static void addKeyToQueue(int pressed, bool isJoystick, unsigned int keyCode)
   s_KeyQueueWriteIndex %= KEYQUEUE_SIZE;
 }
 
+void getWeather(char *metsource_key, char *metsource_place_id)
+{
+  if (meteosource)
+  {
+    char *sections = "hourly";
+    char *timezone = "UTC";
+    char *language = "en";
+    char *units = "metric";
+    temperature_forecast = get_min_max_temparature_forecast(meteosource, metsource_place_id, sections, timezone, language, units);
+  }
+}
+
 static void handleKeyInput()
 {
   SDL_Event e;
@@ -251,6 +262,99 @@ static void handleKeyInput()
   }
 }
 
+
+void drawFrame()
+{
+  uint32_t *pix = surface->pixels;
+  for (int y = 0; y < matrix_height; ++y)
+  {
+    for (int x = 0; x < matrix_width; ++x)
+    {
+      if (x < surface_width && y < surface_height)
+      {
+        if (!is_game_sleeping)
+        {
+          uint8_t r = *pix >> 16;
+          uint8_t g = *pix >> 8;
+          uint8_t b = *pix;
+          led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
+        }
+        else
+        {
+          led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
+        }
+        pix++;
+      }
+      else
+      {
+        led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
+      }
+    }
+  }
+  time(&rawtime);
+  info = localtime(&rawtime);
+  char time_buffer[20];
+  strftime(time_buffer, 20, "%H:%M", info);
+  draw_text(offscreen_canvas, font, 0, 56, 255, 255, 0, time_buffer, 1);
+
+  if (!temperature_forecast.isError)
+  {
+    char temp_message[20];
+    sprintf(temp_message, "%.1f° - %.1f°", temperature_forecast.min, temperature_forecast.max);
+    draw_text(offscreen_canvas, font, 0, 64, 255, 255, 0, temp_message, 1);
+  }
+
+  offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
+  handleKeyInput();
+}
+
+void *refreshWeatherAndRestartDoom(void *arg)
+{
+  while (true)
+  {
+    printf("Timer thread: calling refreshWeatherAndRestartDoom\n");
+    getWeather(metsource_key, metsource_place_id);
+    is_game_sleeping = false;
+    S_SetMusicVolume(127);
+    sleep(refresh_weather_timeout);
+  }
+  return NULL;
+}
+
+void *putDoomToSleep(void *arg)
+{
+  while (true)
+  {
+    printf("Timer thread: calling putDoomToSleep\n");
+    if (!is_game_sleeping)
+    {
+      clock_t now_time = clock();
+      int elapsed_sec = (int)(now_time - last_activity_time) / CLOCKS_PER_SEC;
+      if (elapsed_sec >= sleep_timeout)
+      {
+        is_game_sleeping = true;
+        S_SetMusicVolume(0);
+        sleep(sleep_timeout);
+      }
+      else
+      {
+        sleep(sleep_timeout - elapsed_sec);
+      }
+    }
+    else
+    {
+      sleep(sleep_timeout);
+    }
+  }
+  return NULL;
+}
+
+void catchInt(int sig_num)
+{
+  led_matrix_delete(matrix);
+  exit(0);
+}
+
 int DG_GetKey(int *pressed, unsigned char *doomKey)
 {
   if (s_KeyQueueReadIndex == s_KeyQueueWriteIndex)
@@ -273,99 +377,68 @@ int DG_GetKey(int *pressed, unsigned char *doomKey)
   return 0;
 }
 
-void catch_int(int sig_num)
+void DG_Init()
 {
-  led_matrix_delete(matrix);
-  exit(0);
-}
+  surface_width = matrix_width;
+  surface_height = matrix_width * 0.75;
 
-void getWeather(char *metsource_key, char *metsource_place_id)
-{
-  if (meteosource)
+  if (surface_height > matrix_height)
   {
-    char *sections = "hourly";
-    char *timezone = "UTC";
-    char *language = "en";
-    char *units = "metric";
-    temperatureForecast = get_min_max_temparature_forecast(meteosource, metsource_place_id, sections, timezone, language, units);
+    surface_height = matrix_height;
+    surface_width = surface_height / 0.75;
   }
-}
-
-void draw_frame()
-{
-  uint32_t *pix = surface->pixels;
-  for (int y = 0; y < matrixHeight; ++y)
+  SDL_InitSubSystem(SDL_INIT_HAPTIC | SDL_INIT_JOYSTICK);
+  SDL_Joystick *joy;
+  if (SDL_NumJoysticks() > 0)
   {
-    for (int x = 0; x < matrixWidth; ++x)
+    joy = SDL_JoystickOpen(0);
+    if (joy)
     {
-      if (x < surfaceWidth && y < surfaceHeight)
-      {
-        if (!is_game_sleeping) {
-          uint8_t r = *pix >> 16;
-          uint8_t g = *pix >> 8;
-          uint8_t b = *pix;
-          led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
-        } else {
-          led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
-        }
-        pix++;
-      }
-      else
-      {
-        led_canvas_set_pixel(offscreen_canvas, x, y, 0, 0, 0);
-      }
+      printf("Opened Joystick 0\n");
+      printf("Name: %s\n", SDL_JoystickName(0));
+      printf("Number of Axes: %d\n", SDL_JoystickNumAxes(joy));
+      printf("Number of Buttons: %d\n", SDL_JoystickNumButtons(joy));
+      printf("Number of Balls: %d\n", SDL_JoystickNumBalls(joy));
+    }
+    else
+    {
+      printf("Couldn't open Joystick 0\n");
     }
   }
-  time(&rawtime);
-  info = localtime(&rawtime);
-  char time_buffer[20];
-  strftime(time_buffer, 20, "%H:%M", info);
-  draw_text(offscreen_canvas, font, 0, 56, 255, 255, 0, time_buffer, 1);
+  S_SetMusicVolume(127);
 
-  if (!temperatureForecast.isError)
-  {
-    char temp_message[20];
-    sprintf(temp_message, "%.1f° - %.1f°", temperatureForecast.min, temperatureForecast.max);
-    draw_text(offscreen_canvas, font, 0, 64, 255, 255, 0, temp_message, 1);
-  }
-
-  offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
-  handleKeyInput();
+  window = SDL_CreateWindow("DOOM",
+                            SDL_WINDOWPOS_UNDEFINED,
+                            SDL_WINDOWPOS_UNDEFINED,
+                            DOOMGENERIC_RESX,
+                            DOOMGENERIC_RESY,
+                            SDL_WINDOW_FULLSCREEN_DESKTOP);
+  surface = SDL_CreateRGBSurface(0, surface_width, surface_height, 32, 0, 0, 0, 0);
+  renderer = SDL_CreateSoftwareRenderer(surface);
+  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_TARGET, DOOMGENERIC_RESX, DOOMGENERIC_RESY);
 }
 
-void *refresh_weather_and_restart_doom(void *arg)
+void DG_SleepMs(uint32_t ms)
 {
-  while (true)
-  {
-    printf("Timer thread: calling refresh_weather_and_restart_doom\n");
-    getWeather(metsource_key, metsource_place_id);
-    is_game_sleeping = false;
-    S_SetMusicVolume(127);
-    sleep(refresh_weather_timeout);
-  }
-  return NULL;
+  SDL_Delay(ms);
 }
 
-void *put_doom_to_sleep(void *arg)
+uint32_t DG_GetTicksMs()
 {
-  while (true)
-  {
-    printf("Timer thread: calling put_doom_to_sleep\n");
-    if (!is_game_sleeping) {
-      clock_t now_time = clock();
-      int elapsed_sec = (int)(now_time - last_activity_time) / CLOCKS_PER_SEC;
-      if (elapsed_sec >= sleep_timeout) {
-        is_game_sleeping = true;
-        S_SetMusicVolume(0);
-        sleep(sleep_timeout);
-      } else {
-        sleep(sleep_timeout - elapsed_sec);
-      }
-    } else {
-      sleep(sleep_timeout);
-    }
-  }
-  return NULL;
+  return SDL_GetTicks();
+}
+
+void DG_SetWindowTitle(const char *title)
+{
+}
+
+void DG_DrawFrame()
+{
+  SDL_UpdateTexture(texture, NULL, DG_ScreenBuffer, DOOMGENERIC_RESX * sizeof(uint32_t));
+  SDL_RenderClear(renderer);
+  SDL_RenderCopy(renderer, texture, NULL, NULL);
+  SDL_RenderPresent(renderer);
+  drawFrame();
 }
 
 int main(int argc, char **argv)
@@ -408,25 +481,27 @@ int main(int argc, char **argv)
   }
 
   pthread_t refresh_thread_id;
-  if (refresh_weather_timeout) {
-    int err = pthread_create(&refresh_thread_id, NULL, refresh_weather_and_restart_doom, NULL);
+  if (refresh_weather_timeout)
+  {
+    int err = pthread_create(&refresh_thread_id, NULL, refreshWeatherAndRestartDoom, NULL);
     if (err != 0)
     {
       printf("Error creating timer thread: %d\n", err);
       return 1;
     }
-  } 
+  }
   pthread_t sleep_thread_id;
-  if (sleep_timeout) {
-    int err = pthread_create(&sleep_thread_id, NULL, put_doom_to_sleep, NULL);
+  if (sleep_timeout)
+  {
+    int err = pthread_create(&sleep_thread_id, NULL, putDoomToSleep, NULL);
     if (err != 0)
     {
       printf("Error creating timer thread: %d\n", err);
       return 1;
     }
-  } 
+  }
 
-  temperatureForecast.isError = true;
+  temperature_forecast.isError = true;
 
   last_activity_time = clock();
 
@@ -436,84 +511,23 @@ int main(int argc, char **argv)
 
   font = load_font("libs/rpi-rgb-led-matrix/fonts/4x6.bdf");
   offscreen_canvas = led_matrix_create_offscreen_canvas(matrix);
-  led_canvas_get_size(offscreen_canvas, &matrixWidth, &matrixHeight);
+  led_canvas_get_size(offscreen_canvas, &matrix_width, &matrix_height);
   fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n",
-          matrixWidth, matrixHeight, options.hardware_mapping);
+          matrix_width, matrix_height, options.hardware_mapping);
 
   doomgeneric_Create(argc, argv);
-  signal(SIGINT, catch_int);
+  signal(SIGINT, catchInt);
   while (true)
   {
-    if (!is_game_sleeping) {
+    if (!is_game_sleeping)
+    {
       doomgeneric_Tick();
-    } else {
-      draw_frame();
+    }
+    else
+    {
+      drawFrame();
     }
   }
 
   return 0;
-}
-
-void DG_Init()
-{
-  surfaceWidth = matrixWidth;
-  surfaceHeight = matrixWidth * 0.75;
-
-  if (surfaceHeight > matrixHeight)
-  {
-    surfaceHeight = matrixHeight;
-    surfaceWidth = surfaceHeight / 0.75;
-  }
-  SDL_InitSubSystem(SDL_INIT_HAPTIC | SDL_INIT_JOYSTICK);
-  SDL_Joystick *joy;
-  if (SDL_NumJoysticks() > 0)
-  {
-    joy = SDL_JoystickOpen(0);
-    if (joy)
-    {
-      printf("Opened Joystick 0\n");
-      printf("Name: %s\n", SDL_JoystickName(0));
-      printf("Number of Axes: %d\n", SDL_JoystickNumAxes(joy));
-      printf("Number of Buttons: %d\n", SDL_JoystickNumButtons(joy));
-      printf("Number of Balls: %d\n", SDL_JoystickNumBalls(joy));
-    }
-    else
-    {
-      printf("Couldn't open Joystick 0\n");
-    }
-  }
-  S_SetMusicVolume(127);
-
-  window = SDL_CreateWindow("DOOM",
-                            SDL_WINDOWPOS_UNDEFINED,
-                            SDL_WINDOWPOS_UNDEFINED,
-                            DOOMGENERIC_RESX,
-                            DOOMGENERIC_RESY,
-                            SDL_WINDOW_FULLSCREEN_DESKTOP);
-  surface = SDL_CreateRGBSurface(0, surfaceWidth, surfaceHeight, 32, 0, 0, 0, 0);
-  renderer = SDL_CreateSoftwareRenderer(surface);
-  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_TARGET, DOOMGENERIC_RESX, DOOMGENERIC_RESY);
-}
-
-void DG_SleepMs(uint32_t ms)
-{
-  SDL_Delay(ms);
-}
-
-uint32_t DG_GetTicksMs()
-{
-  return SDL_GetTicks();
-}
-
-void DG_SetWindowTitle(const char *title)
-{
-}
-
-void DG_DrawFrame()
-{
-  SDL_UpdateTexture(texture, NULL, DG_ScreenBuffer, DOOMGENERIC_RESX * sizeof(uint32_t));
-  SDL_RenderClear(renderer);
-  SDL_RenderCopy(renderer, texture, NULL, NULL);
-  SDL_RenderPresent(renderer);
-  draw_frame();
 }
