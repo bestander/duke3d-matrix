@@ -13,3 +13,6 @@
 [submodule "libs/meteosource"]
 	path = libs/meteosource
 	url = https://github.com/Meteosource/meteosource_cpp.git
+[submodule "libs/eduke32"]
+	path = libs/eduke32
+	url = https://github.com/bestander/eduke32.git
