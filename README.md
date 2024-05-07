@@ -1,8 +1,9 @@
-# doom-matrix: picture frame
+# duke3d-matrix: picture frame
 
-![Assembeld picture](img/pic.jpg)
+**Work In Progress**
 
-Runs Doom on LED matrices as wall frame connected to a Raspberry Pi.
+Runs Duke Nukem 3D on LED matrices as a wall frame connected to a Raspberry Pi.
+Forks from [Doom Matrix](https://github.com/bestander/doom-matrix) which runs Doom instead.
 
 ## What's in the fork
 
@@ -13,7 +14,7 @@ This is an update to the upstream project with the following additions:
 - Current time and weather forecast is displayed under the game screen
 
 **Made possible thanks to these libraries:**
-- [doomgeneric](https://github.com/ozkl/doomgeneric)
+- [eduke32](https://github.com/bestander/eduke32)
 - [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix)
 - [SDL2](https://github.com/libsdl-org/SDL) / [SDL_mixer 2](https://github.com/libsdl-org/SDL_mixer)
 - [Meteosource](https://github.com/Meteosource/meteosource_cpp)
