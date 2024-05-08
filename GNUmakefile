@@ -76,20 +76,12 @@ physfs_obj := $(obj)/$(physfs)
 
 physfs_excl :=
 
-ifeq ($(PLATFORM),WINDOWS)
-    physfs_excl += physfs_platform_unix.c
-else
-    physfs_excl += physfs_platform_windows.c
-endif
+physfs_excl += physfs_platform_windows.c
 
 ifneq (0,$(USE_PHYSFS))
     physfs_objs := $(call getfiltered,physfs,*.c)
 else
     physfs_objs :=
-endif
-
-ifeq ($(PLATFORM),APPLE)
-    physfs_objs += physfs_platform_apple.m
 endif
 
 physfs_cflags :=
@@ -106,9 +98,7 @@ glad_obj := $(obj)/$(glad)
 
 glad_excl :=
 
-ifneq ($(RENDERTYPE),WIN)
-    glad_excl += glad_wgl.c
-endif
+glad_excl += glad_wgl.c
 
 ifneq (0,$(USE_OPENGL))
     glad_objs := $(call getfiltered,glad,*.c)
@@ -153,12 +143,7 @@ imgui_obj := $(obj)/$(imgui)
 
 imgui_excl :=
 
-ifneq ($(RENDERTYPE),SDL)
-    imgui_excl += imgui_impl_sdl2.cpp
-endif
-ifneq ($(RENDERTYPE),WIN)
-    imgui_excl += imgui_impl_win32.cpp
-endif
+imgui_excl += imgui_impl_win32.cpp
 
 imgui_objs := $(call getfiltered,imgui,*.cpp)
 
@@ -176,29 +161,12 @@ voidwrap_obj := $(obj)/$(voidwrap)
 
 voidwrap_excl :=
 
-ifneq ($(PLATFORM),WINDOWS)
-    voidwrap_excl += dllmain.cpp
-endif
+voidwrap_excl += dllmain.cpp
 
 voidwrap_objs := $(call getfiltered,voidwrap,*.cpp)
 
-ifeq ($(IMPLICIT_ARCH),x86_64)
-    ifeq ($(PLATFORM),WINDOWS)
-        voidwrap_lib := voidwrap_steam_x64.dll
-        steamworks_lib := win64/steam_api64.dll
-    else
-        voidwrap_lib := libvoidwrap_steam.so
-        steamworks_lib := linux64/libsteam_api.so
-    endif
-else
-    ifeq ($(PLATFORM),WINDOWS)
-        voidwrap_lib := voidwrap_steam_x86.dll
-        steamworks_lib := steam_api.dll
-    else
-        voidwrap_lib := libvoidwrap_steam.so
-        steamworks_lib := linux32/libsteam_api.so
-    endif
-endif
+voidwrap_lib := libvoidwrap_steam.so
+steamworks_lib := linux32/libsteam_api.so
 
 voidwrap_cflags := -I$(voidwrap_root)/sdk/public/steam -fPIC -fvisibility=hidden -Wno-invalid-offsetof
 
@@ -280,13 +248,7 @@ else
 
 endif
 
-ifeq ($(PLATFORM),WINDOWS)
-    ifeq ($(STARTUP_WINDOW),1)
-        engine_editor_objs += startwin.editor.cpp
-    endif
-else
-    engine_excl += winbits.cpp
-endif
+engine_excl += winbits.cpp
 
 ifeq ($(PLATFORM),WII)
     LINKERFLAGS += -Wl,-wrap,c_default_exceptionhandler
@@ -294,12 +256,7 @@ else
     engine_excl += wiibits.cpp
 endif
 
-ifneq ($(RENDERTYPE),SDL)
-    engine_excl += sdlayer.cpp
-endif
-ifneq ($(RENDERTYPE),WIN)
-    engine_excl += winlayer.cpp rawinput.cpp
-endif
+engine_excl += winlayer.cpp rawinput.cpp
 
 ifeq (1,$(HAVE_GTK2))
     ifeq ($(STARTUP_WINDOW),1)
@@ -323,19 +280,6 @@ ifeq (0,$(NOASM))
   engine_objs += a.nasm
 else
   engine_objs += a-c.cpp
-endif
-
-ifeq ($(PLATFORM),DARWIN)
-    engine_objs += osxbits.mm
-    engine_tools_objs += osxbits.mm
-    ifeq ($(STARTUP_WINDOW),1)
-        engine_editor_objs += startosx.editor.mm
-    endif
-    ifeq ($(SDL_TARGET),1)
-        ifneq ($(SDL_FRAMEWORK),0)
-            engine_objs += SDLMain.mm
-        endif
-    endif
 endif
 
 
@@ -367,15 +311,7 @@ audiolib_deps :=
 audiolib_excl := \
     music_external.cpp \
 
-ifneq ($(PLATFORM),WINDOWS)
-    audiolib_excl += driver_directsound.cpp driver_winmm.cpp
-endif
-ifneq ($(SUBPLATFORM),LINUX)
-    audiolib_excl += driver_alsa.cpp
-endif
-ifneq ($(RENDERTYPE),SDL)
-    audiolib_excl += driver_sdl.cpp
-endif
+audiolib_excl += driver_directsound.cpp driver_winmm.cpp
 
 audiolib_objs := $(call getfiltered,audiolib,*.cpp)
 
@@ -424,9 +360,6 @@ tools_targets := \
     wad2art \
     wad2map \
 
-ifeq ($(PLATFORM),WINDOWS)
-    tools_targets += enumdisplay getdxdidf
-endif
 ifeq ($(RENDERTYPE),SDL)
     tools_targets += makesdlkeytrans
 endif
@@ -474,17 +407,6 @@ endif
 ifeq ($(RENDERTYPE),SDL)
     kenbuild_game_rsrc_objs += game_icon.c
     kenbuild_editor_rsrc_objs += build_icon.c
-endif
-ifeq ($(PLATFORM),WINDOWS)
-    kenbuild_game_objs += startwin.game.cpp
-    kenbuild_game_rsrc_objs += gameres.rc
-    kenbuild_editor_rsrc_objs += buildres.rc
-endif
-
-ifeq ($(PLATFORM),DARWIN)
-    ifeq ($(STARTUP_WINDOW),1)
-        kenbuild_game_objs += StartupWinController.game.mm
-    endif
 endif
 
 
@@ -570,30 +492,6 @@ ifeq ($(PLATFORM),BSD)
     LIBS += -lFLAC -lexecinfo
 endif
 
-ifeq ($(PLATFORM),DARWIN)
-    LIBS += -lFLAC \
-            -Wl,-framework,Cocoa -Wl,-framework,Carbon \
-            -Wl,-framework,CoreMIDI -Wl,-framework,AudioUnit \
-            -Wl,-framework,AudioToolbox -Wl,-framework,IOKit
-    ifneq (00,$(DARWIN9)$(DARWIN10))
-        LIBS += -Wl,-framework,QuickTime
-    endif
-
-    ifeq ($(STARTUP_WINDOW),1)
-        duke3d_game_objs += GrpFile.game.mm GameListSource.game.mm startosx.game.mm
-    endif
-endif
-
-ifeq ($(PLATFORM),WINDOWS)
-    LIBS += -lFLAC -ldsound
-    duke3d_game_objs += winbits.cpp
-    duke3d_game_rsrc_objs += gameres.rc
-    duke3d_editor_rsrc_objs += buildres.rc
-    ifeq ($(STARTUP_WINDOW),1)
-        duke3d_game_objs += startwin.game.cpp
-    endif
-endif
-
 ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
     duke3d_game_objs += startgtk.game.cpp
     duke3d_game_gen_objs += game_banner.c
@@ -657,16 +555,6 @@ endif
 ifeq ($(RENDERTYPE),SDL)
     sw_game_rsrc_objs += game_icon.c
     sw_editor_rsrc_objs += game_icon.c
-endif
-ifeq ($(PLATFORM),WINDOWS)
-    sw_game_objs += startwin.game.cpp
-    sw_game_rsrc_objs += gameres.rc
-    sw_editor_rsrc_objs += buildres.rc
-endif
-ifeq ($(PLATFORM),DARWIN)
-    ifeq ($(STARTUP_WINDOW),1)
-        sw_game_objs += GrpFile.game.mm GameListSource.game.mm StartupWinController.game.mm
-    endif
 endif
 
 
@@ -785,11 +673,6 @@ endif
 endif
 ifneq ($$(STRIP),)
 	$$(STRIP) $$@ $$($1_$2_stripflags)
-endif
-ifeq ($$(PLATFORM),DARWIN)
-	cp -RPf "platform/Apple/bundles/$$($1_$2_proper).app" "./"
-	$(call MKDIR,"$$($1_$2_proper).app/Contents/MacOS")
-	cp -f "$$($1_$2)$$(EXESUFFIX)" "$$($1_$2_proper).app/Contents/MacOS/"
 endif
 	$$(call RMDIR,"$$(obj)/$$($1_$2)_dump")
 
@@ -924,9 +807,6 @@ clang-tools: $(filter %.c %.cpp,$(foreach i,$(call getdeps,duke3d,game),$(call e
 $(addprefix clean,$(games)):
 	-$(call RM,$(foreach i,$(roles),$($(subst clean,,$@)_$i)$(EXESUFFIX)))
 	-$(call RMDIR,$($(subst clean,,$@)_obj))
-ifeq ($(PLATFORM),DARWIN)
-	-$(call RMDIR,$(foreach i,$(roles),"$($(subst clean,,$@)_$i_proper).app"))
-endif
 
 cleantools:
 	-$(call RM,$(addsuffix $(EXESUFFIX),$($(subst clean,,$@)_targets)))
