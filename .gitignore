@@ -4,3 +4,6 @@ build/
 doom_matrix
 .vscode
 myrun.sh
+_Makefile
+eduke32
+mapster32
