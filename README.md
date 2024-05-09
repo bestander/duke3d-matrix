@@ -58,7 +58,7 @@ make install (as root)
 **Note:** 
 - It can take a while to compile these on a Pi! You can also consider cross-compiling from a faster machine.
 - If your distro has SDL packages you can install them instead.
-- Even if running `doom-matrix` as `root`, you'll probably need to add your user to the appropriate `audio` group.
+- Even if running `eduke32` as `root`, you'll probably need to add your user to the appropriate `audio` group.
 
 ## Building the project
 
@@ -70,7 +70,7 @@ make install (as root)
 
 ## Running
 
-The binary accepts arguments for both [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix/tree/master) and [doomgeneric](https://github.com/ozkl/doomgeneric), all the necessary params to run it on a double LED matrix on a Raspberry Pi3 are in script `run.sh`.
+The binary accepts arguments for both [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix/tree/master) and [eduke32](https://github.com/bestander/eduke32), all the necessary params to run it on a double LED matrix on a Raspberry Pi3 are in script `run.sh`.
 
 If you want for the board to also show temperature forecast from [Meteosource](https://github.com/Meteosource/meteosource_cpp) you need to register on the website (free) and generate an API token and pass it to the run.sh script:
 

@@ -2,18 +2,6 @@
 # EDuke32 Makefile for GNU Make
 #
 
-### Global Profiles
-ifeq ($(FURY),1)
-    APPBASENAME := fury
-    APPNAME := Ion Fury
-    NETCODE := 0
-    POLYMER := 0
-    RETAIL_MENU := 1
-    STANDALONE := 1
-    USE_LIBVPX := 0
-    SDL_STATIC := 1
-endif
-
 ### Platform and Toolchain Configuration
 include libs/eduke32/Common.mak
 
@@ -49,6 +37,34 @@ $(filter-out $(strip $($1_excl)), $(subst $($1_src)/, ,$(wildcard $($1_src)/$2))
 endef
 
 ##### External Library Definitions
+
+#### led-matrix
+
+ledmatrix := ledmatrix
+
+ledmatrix_root := ./libs/rpi-rgb-led-matrix
+ledmatrix_src := $(ledmatrix_root)/lib
+ledmatrix_inc := $(ledmatrix_root)/include
+ledmatrix_obj := $(obj)/$(ledmatrix)
+
+ledmatrix_excl :=
+ledmatrix_objs := $(call getfiltered,ledmatrix,*.cc)
+
+ledmatrix_cflags := -DBUILDING_STATIC -I$(ledmatrix_inc) -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual
+
+#### duke-matrix
+
+dukematrix := dukematrix
+
+dukematrix_root := .
+dukematrix_src := $(dukematrix_root)/src
+dukematrix_obj := $(obj)/$(dukematrix)
+dukematrix_deps := ledmatrix
+dukematrix_excl :=
+dukematrix_objs := $(call getfiltered,dukematrix,*.cpp)
+
+dukematrix_cflags := -DBUILDING_STATIC -I$(ledmatrix_inc) -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual
+
 
 #### libxmp-lite
 
@@ -194,7 +210,7 @@ engine_obj := $(obj)/$(engine)
 
 engine_cflags :=
 
-engine_deps :=
+engine_deps := ledmatrix dukematrix
 
 ifneq (1,$(SDL_TARGET))
     engine_deps += imgui
@@ -250,11 +266,7 @@ endif
 
 engine_excl += winbits.cpp
 
-ifeq ($(PLATFORM),WII)
-    LINKERFLAGS += -Wl,-wrap,c_default_exceptionhandler
-else
-    engine_excl += wiibits.cpp
-endif
+engine_excl += wiibits.cpp
 
 engine_excl += winlayer.cpp rawinput.cpp
 
@@ -365,51 +377,6 @@ ifeq ($(RENDERTYPE),SDL)
 endif
 
 
-#### KenBuild (Test Game)
-
-kenbuild := kenbuild
-
-kenbuild_root := $(source)/$(kenbuild)
-kenbuild_src := $(kenbuild_root)/src
-kenbuild_rsrc := $(kenbuild_root)/rsrc
-kenbuild_obj := $(obj)/$(kenbuild)
-
-kenbuild_cflags := -I$(kenbuild_src)
-
-kenbuild_game := ekenbuild
-kenbuild_editor := ekenbuild-editor
-
-kenbuild_game_deps := audiolib
-
-kenbuild_game_proper := EKenBuild
-kenbuild_editor_proper := EKenBuild-Editor
-
-kenbuild_game_objs := \
-    common.cpp \
-    config.cpp \
-    kdmeng.cpp \
-    game.cpp \
-
-kenbuild_editor_objs := \
-    bstub.cpp \
-    common.cpp \
-
-kenbuild_game_rsrc_objs :=
-kenbuild_editor_rsrc_objs :=
-kenbuild_game_gen_objs :=
-kenbuild_editor_rsrc_objs :=
-
-ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
-    kenbuild_game_objs += startgtk.game.cpp
-    kenbuild_game_gen_objs += game_banner.c
-    kenbuild_editor_gen_objs += build_banner.c
-endif
-ifeq ($(RENDERTYPE),SDL)
-    kenbuild_game_rsrc_objs += game_icon.c
-    kenbuild_editor_rsrc_objs += build_icon.c
-endif
-
-
 #### Duke Nukem 3D
 
 duke3d := duke3d
@@ -425,10 +392,7 @@ duke3d_src := $(duke3d_root)/src
 duke3d_rsrc := $(duke3d_root)/rsrc
 duke3d_obj := $(obj)/$(duke3d)
 
-ifneq (,$(APPBASENAME))
-    ifeq ($(PLATFORM),WINDOWS)
-        duke3d_rsrc := $(duke3d_root)/rsrc/$(APPBASENAME)
-    endif
+ifneq (,$(APPBASENAME))   
     duke3d_obj := $(obj)/$(APPBASENAME)
 endif
 
@@ -502,62 +466,6 @@ ifeq ($(RENDERTYPE),SDL)
     duke3d_editor_rsrc_objs += build_icon.c
 endif
 
-
-#### Shadow Warrior
-
-sw := sw
-
-sw_root := $(source)/$(sw)
-sw_src := $(sw_root)/src
-sw_rsrc := $(sw_root)/rsrc
-sw_obj := $(obj)/$(sw)
-
-sw_cflags :=
-
-sw_game_deps := audiolib mact
-sw_editor_deps := audiolib
-
-sw_game := voidsw
-sw_editor := wangulator
-
-sw_game_proper := VoidSW
-sw_editor_proper := Wangulator
-
-sw_editor_objs := \
-    bldscript.cpp \
-    brooms.cpp \
-    colormap.cpp \
-    common.cpp \
-    grpscan.cpp \
-    jbhlp.cpp \
-    jnstub.cpp \
-
-sw_excl := \
-    startgtk.game.cpp \
-    startwin.game.cpp \
-    $(sw_editor_objs) \
-
-sw_game_objs := $(call getfiltered,sw,*.cpp) \
-    colormap.cpp \
-    common.cpp \
-    grpscan.cpp \
-
-sw_game_rsrc_objs :=
-sw_editor_rsrc_objs :=
-sw_game_gen_objs :=
-sw_editor_gen_objs :=
-
-ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
-    sw_game_objs += startgtk.game.cpp
-    sw_game_gen_objs += game_banner.c
-    sw_editor_gen_objs += build_banner.c
-endif
-ifeq ($(RENDERTYPE),SDL)
-    sw_game_rsrc_objs += game_icon.c
-    sw_editor_rsrc_objs += game_icon.c
-endif
-
-
 #### Includes
 
 COMPILERFLAGS += \
@@ -585,8 +493,6 @@ endif
 
 games := \
     duke3d \
-    kenbuild \
-    sw \
 
 libraries := \
     audiolib \
@@ -596,6 +502,8 @@ libraries := \
     libxmplite \
     mact \
     voidwrap \
+    ledmatrix \
+    dukematrix \
 
 ifneq (0,$(USE_MIMALLOC))
     libraries += mimalloc
@@ -653,24 +561,12 @@ ebacktrace: $(ebacktrace_dll) | start
 voidwrap: $(voidwrap_lib) | start
 	@$(call LL,$^)
 
-ifeq ($(PLATFORM),WII)
-ifneq ($(ELF2DOL),)
-%$(DOLSUFFIX): %$(EXESUFFIX)
-endif
-endif
-
-
 define BUILDRULE
 
 $$($1_$2)$$(EXESUFFIX): $$(foreach i,$(call getdeps,$1,$2),$$(call expandobjs,$$i)) $$($1_$2_miscdeps) | $$($1_$2_orderonlydeps)
 	$$(LINK_STATUS)
 	$$(call MKDIR,"$$(obj)/$$($1_$2)_dump")
 	$$(RECIPE_IF) $$(LINKER) $$(call LF,$$(obj)/$$($1_$2)_dump) -o $$@ $$^ $$(GUI_LIBS) $$($1_$2_ldflags) $$(LIBDIRS) $$(LIBS) $$(RECIPE_RESULT_LINK)
-ifeq ($$(PLATFORM),WII)
-ifneq ($$(ELF2DOL),)
-	$$(ELF2DOL) $$@ $$($1_$2)$$(DOLSUFFIX)
-endif
-endif
 ifneq ($$(STRIP),)
 	$$(STRIP) $$@ $$($1_$2_stripflags)
 endif
@@ -732,6 +628,11 @@ $$($1_obj)/%.$$o: $$($1_src)/%.c | $$($1_obj)
 	$$(RECIPE_IF) $$(COMPILER_C) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 
 $$($1_obj)/%.$$o: $$($1_src)/%.cpp | $$($1_obj)
+	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
+	$$(RECIPE_IF) $$(COMPILER_CXX) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
+
+$$($1_obj)/%.$$o: $$($1_src)/%.cc | $$($1_obj)
 	$$(COMPILE_STATUS)
 	$$(call MKDIR,$$(dir $$@))
 	$$(RECIPE_IF) $$(COMPILER_CXX) $$($1_cflags) -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
@@ -812,7 +713,7 @@ cleantools:
 	-$(call RM,$(addsuffix $(EXESUFFIX),$($(subst clean,,$@)_targets)))
 	-$(call RMDIR,$($(subst clean,,$@)_obj))
 
-clean: cleanduke3d cleansw cleantools
+clean: cleanduke3d cleantools
 	-$(call RMDIR,$(obj))
 	-$(call RM,$(ebacktrace_dll))
 	-$(call RM,$(voidwrap_lib))
