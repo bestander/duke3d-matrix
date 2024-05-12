@@ -48,7 +48,7 @@ ledmatrix_inc := $(ledmatrix_root)/include
 ledmatrix_obj := $(obj)/$(ledmatrix)
 
 ledmatrix_excl :=
-ledmatrix_objs := $(call getfiltered,ledmatrix,*.cc)
+ledmatrix_objs := $(call getfiltered,ledmatrix,*.c*)
 
 ledmatrix_cflags := -DBUILDING_STATIC -I$(ledmatrix_inc) -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual
 
@@ -516,11 +516,11 @@ endif
 components := \
     $(games) \
     $(libraries) \
-    tools \
+    # tools \
 
 roles := \
     game \
-    editor \
+    # editor \
 
 
 ifeq ($(PRETTY_OUTPUT),1)

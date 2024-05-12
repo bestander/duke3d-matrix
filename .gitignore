@@ -1,9 +1,6 @@
-build/
 *.swp
 .DS_Store
-doom_matrix
 .vscode
 myrun.sh
 _Makefile
 eduke32
-mapster32
