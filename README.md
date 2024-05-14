@@ -40,6 +40,8 @@ Audio should be decently turn-key, but can take a little more work. It's not rec
 Because I built the libraries locally I needed to install:
 - Sounds
   - `libasound2-dev`
+  - `libflac-dev`
+  - `libvpx-dev`
 - Music
   - `fluid-soundfont-gm`
   - `freepats`
