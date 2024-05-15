@@ -1,17 +1,27 @@
 #include <cstdio>
 #include <cstdint>
 #include "led-matrix.h"
+#include <time.h>
+#include <string.h>
 
 using namespace rgb_matrix;
 
 RGBMatrix *matrix;
 FrameCanvas *offscreen_canvas;
-rgb_matrix::Color color;
+rgb_matrix::Color time_color;
 rgb_matrix::Font font;
 
 int matrix_width, matrix_height;
 int surface_width, surface_height;
 int surface_to_matrix_ratio;
+
+bool is_game_sleeping = false;
+int sleep_timeout = 0;
+int refresh_weather_timeout = 0;
+clock_t last_activity_time;
+
+char *metsource_key = NULL;
+char *metsource_place_id = NULL;
 
 void SDL_on_Init(int argc, char *argv[])
 {
@@ -38,17 +48,41 @@ void SDL_on_Init(int argc, char *argv[])
         printf("Failed to CreateFrameCanvas \n");
         return;
     }
-    color.r = 255;
+    time_color.r = 150;
     if (!font.LoadFont("libs/rpi-rgb-led-matrix/fonts/4x6.bdf"))
     {
         fprintf(stderr, "Couldn't load font '%s'\n", "4x6");
         return;
     }
 
-    DrawText(offscreen_canvas, font,
-             0, 60,
-             color, NULL, "TEST",
-             0);
+    char *metsource_key_arg = "--metsource_key=";
+    char *metsource_location_arg = "--metsource_location=";
+    char *sleep_timeout_arg = "--sleep_timeout_sec=";
+    char *refresh_timer_arg = "--refresh_weather_timer_sec=";
+    int i;
+    for (i = 1; i < argc; i++)
+    {
+        if (strncmp(argv[i], metsource_key_arg, strlen(metsource_key_arg)) == 0)
+        {
+            metsource_key = argv[i] + strlen(metsource_key_arg);
+            printf("Metsource key: %s\n", metsource_key);
+        }
+        else if (strncmp(argv[i], metsource_location_arg, strlen(metsource_location_arg)) == 0)
+        {
+            metsource_place_id = argv[i] + strlen(metsource_location_arg);
+            printf("Metsource place: %s\n", metsource_place_id);
+        }
+        else if (strncmp(argv[i], sleep_timeout_arg, strlen(sleep_timeout_arg)) == 0)
+        {
+            sleep_timeout = atoi(argv[i] + strlen(sleep_timeout_arg));
+            printf("Sleep timoeut: %d\n", sleep_timeout);
+        }
+        else if (strncmp(argv[i], refresh_timer_arg, strlen(refresh_timer_arg)) == 0)
+        {
+            refresh_weather_timeout = atoi(argv[i] + strlen(refresh_timer_arg));
+            printf("Data refresh timoeut: %d\n", refresh_weather_timeout);
+        }
+    }
 }
 
 void SDL_OverrideResolution(int *width, int *height)
@@ -56,8 +90,6 @@ void SDL_OverrideResolution(int *width, int *height)
     *width = surface_width;
     *height = surface_height;
 }
-
-bool is_game_sleeping = false;
 
 void SDL_on_DrawFrame(uint32_t *pixels)
 {
@@ -68,22 +100,11 @@ void SDL_on_DrawFrame(uint32_t *pixels)
         {
             if (!is_game_sleeping && y < surface_height / 10)
             {
-                uint16_t red = 0;
-                uint16_t green = 0;
-                uint16_t blue = 0;
-                int ratio_square = surface_to_matrix_ratio * surface_to_matrix_ratio;
-
-                for (int ix = 0; ix < surface_to_matrix_ratio; ++ix)
-                {
-                    for (int iy = 0; iy < surface_to_matrix_ratio; ++iy)
-                    {
-                        pix = pixels + x * surface_to_matrix_ratio + ix + (surface_to_matrix_ratio * y + iy) * surface_width;
-                        red += *pix >> 16 & 0xFF;
-                        green += *pix >> 8 & 0xFF;
-                        blue += *pix & 0xFF;
-                    }
-                }
-                offscreen_canvas->SetPixel(x, y, red / ratio_square, green / ratio_square, blue / ratio_square);
+                uint8_t red = *pix >> 16;
+                uint8_t green = *pix >> 8;
+                uint8_t blue = *pix;
+                pix = pixels + x * surface_to_matrix_ratio + (surface_to_matrix_ratio * y) * surface_width;
+                offscreen_canvas->SetPixel(x, y, red, green, blue);
             }
             else
             {
@@ -91,9 +112,13 @@ void SDL_on_DrawFrame(uint32_t *pixels)
             }
         }
     }
-    DrawText(offscreen_canvas, font,
-             0, 60,
-             color, NULL, "TEST",
-             1);
+
+    char time_buffer[20];
+    time_t raw_time;
+    struct tm *info;
+    time(&raw_time);
+    info = localtime(&raw_time);
+    strftime(time_buffer, 20, "%H:%M", info);
+    DrawText(offscreen_canvas, font, 0, 56, time_color, NULL, time_buffer, 1);
     offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas);
 }
