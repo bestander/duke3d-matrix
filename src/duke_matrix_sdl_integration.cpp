@@ -3,6 +3,9 @@
 #include "led-matrix.h"
 #include <time.h>
 #include <string.h>
+#include <stdio.h>
+#include <unistd.h>
+#include "Meteosource.h"
 
 using namespace rgb_matrix;
 
@@ -22,6 +25,93 @@ clock_t last_activity_time;
 
 char *metsource_key = NULL;
 char *metsource_place_id = NULL;
+Meteosource *meteosource;
+typedef struct
+{
+    bool isError;
+    double min;
+    double max;
+} MinMaxTemperature;
+MinMaxTemperature temperature_forecast;
+
+void getWeather()
+{
+    if (meteosource)
+    {
+        const char *sections = "hourly";
+        const char *timezone = "UTC";
+        const char *language = "en";
+        const char *units = "metric";
+
+        temperature_forecast.isError = true;
+
+        auto res = meteosource->get_point_forecast(metsource_place_id, sections, timezone, language, units);
+        if (!res)
+        {
+            return;
+        }
+
+        if (res->hourly.size() > 0)
+        {
+            temperature_forecast.isError = false;
+            temperature_forecast.min = res->hourly[0]->temperature;
+            temperature_forecast.max = res->hourly[0]->temperature;
+            for (int i = 0; i < 5; ++i)
+            {
+                printf("Hourly: %.1f \n", res->hourly[i]->temperature);
+                if (res->hourly[i]->temperature > temperature_forecast.max)
+                {
+                    temperature_forecast.max = res->hourly[i]->temperature;
+                }
+                if (res->hourly[i]->temperature < temperature_forecast.min)
+                {
+                    temperature_forecast.min = res->hourly[i]->temperature;
+                }
+            }
+        }
+    }
+}
+
+void *refreshWeatherAndRestartDuke(void *arg)
+{
+    while (true)
+    {
+        printf("Timer thread: calling refreshWeatherAndRestartDoom\n");
+        getWeather();
+        is_game_sleeping = false;
+        // S_SetMusicVolume(127);
+        sleep(refresh_weather_timeout);
+    }
+    return NULL;
+}
+
+void *putDukeToSleep(void *arg)
+{
+    while (true)
+    {
+        printf("Timer thread: calling putDoomToSleep\n");
+        if (!is_game_sleeping)
+        {
+            clock_t now_time = clock();
+            int elapsed_sec = (int)(now_time - last_activity_time) / CLOCKS_PER_SEC;
+            if (elapsed_sec >= sleep_timeout)
+            {
+                is_game_sleeping = true;
+                // S_SetMusicVolume(0);
+                sleep(sleep_timeout);
+            }
+            else
+            {
+                sleep(sleep_timeout - elapsed_sec);
+            }
+        }
+        else
+        {
+            sleep(sleep_timeout);
+        }
+    }
+    return NULL;
+}
 
 void SDL_on_Init(int argc, char *argv[])
 {
@@ -55,10 +145,10 @@ void SDL_on_Init(int argc, char *argv[])
         return;
     }
 
-    char *metsource_key_arg = "--metsource_key=";
-    char *metsource_location_arg = "--metsource_location=";
-    char *sleep_timeout_arg = "--sleep_timeout_sec=";
-    char *refresh_timer_arg = "--refresh_weather_timer_sec=";
+    const char *metsource_key_arg = "--metsource_key=";
+    const char *metsource_location_arg = "--metsource_location=";
+    const char *sleep_timeout_arg = "--sleep_timeout_sec=";
+    const char *refresh_timer_arg = "--refresh_weather_timer_sec=";
     int i;
     for (i = 1; i < argc; i++)
     {
@@ -81,6 +171,30 @@ void SDL_on_Init(int argc, char *argv[])
         {
             refresh_weather_timeout = atoi(argv[i] + strlen(refresh_timer_arg));
             printf("Data refresh timoeut: %d\n", refresh_weather_timeout);
+        }
+    }
+    temperature_forecast.isError = true;
+    if (metsource_key && metsource_place_id)
+    {
+        meteosource = new Meteosource(metsource_key, "free", "https://www.meteosource.com/api");
+    }
+
+    pthread_t refresh_thread_id;
+    if (refresh_weather_timeout)
+    {
+        int err = pthread_create(&refresh_thread_id, NULL, refreshWeatherAndRestartDuke, NULL);
+        if (err != 0)
+        {
+            printf("Error creating timer thread: %d\n", err);
+        }
+    }
+    pthread_t sleep_thread_id;
+    if (sleep_timeout)
+    {
+        int err = pthread_create(&sleep_thread_id, NULL, putDukeToSleep, NULL);
+        if (err != 0)
+        {
+            printf("Error creating timer thread: %d\n", err);
         }
     }
 }
@@ -120,5 +234,13 @@ void SDL_on_DrawFrame(uint32_t *pixels)
     info = localtime(&raw_time);
     strftime(time_buffer, 20, "%H:%M", info);
     DrawText(offscreen_canvas, font, 0, 56, time_color, NULL, time_buffer, 1);
+
+    if (!temperature_forecast.isError)
+    {
+        char temp_message[20];
+        sprintf(temp_message, "%.1f° - %.1f°", temperature_forecast.min, temperature_forecast.max);
+        DrawText(offscreen_canvas, font, 0, 64, time_color, NULL, temp_message, 1);
+    }
+
     offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas);
 }

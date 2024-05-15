@@ -52,6 +52,14 @@ ledmatrix_objs := $(call getfiltered,ledmatrix,*.c*)
 
 ledmatrix_cflags := -DBUILDING_STATIC -I$(ledmatrix_inc) -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual
 
+meteosource := meteosource
+
+meteosource_root := ./libs/meteosource
+meteosource_src := $(meteosource_root)/src
+meteosource_obj := $(obj)/$(meteosource)
+meteosource_objs := $(call getfiltered,meteosource,*.cpp)
+meteosource_cflags := -DBUILDING_STATIC -I$(meteosource_src) -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual -fexceptions
+
 #### duke-matrix
 
 dukematrix := dukematrix
@@ -59,11 +67,11 @@ dukematrix := dukematrix
 dukematrix_root := .
 dukematrix_src := $(dukematrix_root)/src
 dukematrix_obj := $(obj)/$(dukematrix)
-dukematrix_deps := ledmatrix
+dukematrix_deps := ledmatrix meteosource
 dukematrix_excl :=
 dukematrix_objs := $(call getfiltered,dukematrix,*.cpp)
 
-dukematrix_cflags := -DBUILDING_STATIC -I$(ledmatrix_inc) -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual
+dukematrix_cflags := -DBUILDING_STATIC -I$(ledmatrix_inc) -I$(meteosource_src) -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-cast-qual
 
 
 #### libxmp-lite
@@ -210,7 +218,7 @@ engine_obj := $(obj)/$(engine)
 
 engine_cflags :=
 
-engine_deps := ledmatrix dukematrix
+engine_deps := dukematrix
 
 ifneq (1,$(SDL_TARGET))
     engine_deps += imgui
@@ -449,7 +457,7 @@ duke3d_game_orderonlydeps :=
 duke3d_editor_orderonlydeps :=
 
 ifeq ($(SUBPLATFORM),LINUX)
-    LIBS += -lFLAC -lasound
+    LIBS += -lFLAC -lasound -lcurl -ljsoncpp
 endif
 
 ifeq ($(PLATFORM),BSD)
@@ -504,6 +512,7 @@ libraries := \
     voidwrap \
     ledmatrix \
     dukematrix \
+    meteosource \
 
 ifneq (0,$(USE_MIMALLOC))
     libraries += mimalloc
