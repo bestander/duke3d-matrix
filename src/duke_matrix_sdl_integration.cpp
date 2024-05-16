@@ -79,6 +79,8 @@ void *refreshWeatherAndRestartDuke(void *arg)
         printf("Timer thread: calling refreshWeatherAndRestartDoom\n");
         getWeather();
         is_game_sleeping = false;
+//        S_PauseSounds(true); in game.cpp
+
         // S_SetMusicVolume(127);
         sleep(refresh_weather_timeout);
     }
