@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdint>
 #include "led-matrix.h"
+#include "../libs/eduke32/source/duke3d/src/sounds.h"
 #include <time.h>
 #include <string.h>
 #include <stdio.h>
@@ -19,10 +20,10 @@ int surface_width, surface_height;
 int surface_to_matrix_ratio;
 
 bool is_game_sleeping = false;
-int sleep_timeout = 0;
-int refresh_weather_timeout = 0;
 clock_t last_activity_time;
+int sleep_timeout = 0;
 
+int refresh_weather_timeout = 0;
 char *metsource_key = NULL;
 char *metsource_place_id = NULL;
 Meteosource *meteosource;
@@ -76,12 +77,12 @@ void *refreshWeatherAndRestartDuke(void *arg)
 {
     while (true)
     {
-        printf("Timer thread: calling refreshWeatherAndRestartDoom\n");
+        printf("Timer thread: calling refreshWeatherAndRestartDuke\n");
         getWeather();
+        // TODO G_PlaybackDemo before sleep?
         is_game_sleeping = false;
-//        S_PauseSounds(true); in game.cpp
-
-        // S_SetMusicVolume(127);
+        S_PauseSounds(false);
+        S_PauseMusic(false);
         sleep(refresh_weather_timeout);
     }
     return NULL;
@@ -91,7 +92,7 @@ void *putDukeToSleep(void *arg)
 {
     while (true)
     {
-        printf("Timer thread: calling putDoomToSleep\n");
+        printf("Timer thread: calling putDukeToSleep\n");
         if (!is_game_sleeping)
         {
             clock_t now_time = clock();
@@ -99,7 +100,8 @@ void *putDukeToSleep(void *arg)
             if (elapsed_sec >= sleep_timeout)
             {
                 is_game_sleeping = true;
-                // S_SetMusicVolume(0);
+                S_PauseSounds(true);
+                S_PauseMusic(true);
                 sleep(sleep_timeout);
             }
             else
@@ -113,6 +115,15 @@ void *putDukeToSleep(void *arg)
         }
     }
     return NULL;
+}
+
+void SDL_on_InputEvent() {
+    last_activity_time = clock();
+    if (is_game_sleeping) {
+        is_game_sleeping = false;
+        S_PauseSounds(false);
+        S_PauseMusic(false);
+    }
 }
 
 void SDL_on_Init(int argc, char *argv[])
