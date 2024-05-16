@@ -216,7 +216,7 @@ engine_src := $(engine_root)/src
 engine_inc := $(engine_root)/include
 engine_obj := $(obj)/$(engine)
 
-engine_cflags :=
+engine_cflags := -DSDL_OVERRIDE_RENDERING
 
 engine_deps := dukematrix
 
