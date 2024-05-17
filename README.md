@@ -1,8 +1,10 @@
-# duke3d-matrix: picture frame
+# duke3d LED Matrix: picture frame
 
 Runs Duke Nukem 3D on a LED matricx as a wall frame connected to a Raspberry Pi.
 The work is based on [Doom Matrix](https://github.com/bestander/doom-matrix) (which itself is a fork of @twstokes's project) that started as
 a question "But can you run Duke on it?".
+
+![playback](img/play.gif)
 
 
 ## Features
