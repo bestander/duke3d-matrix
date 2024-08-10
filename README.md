@@ -68,6 +68,10 @@ It will automatically wake up on any gamepad button click and when weather is re
 
 `./run.sh --sleep_timeout_sec=300`
 
+You can pass a path to a background image that is shown while the game is sleeping. Must be a BMP file with 64px width.
+
+`./run.sh --sleep_timeout_sec=300 --background-image-path=img/background.bmp`
+
 ## Controls
 
 eduje32.cfg is included in this repo and is already configured for a SEGA style 8bit-do gamepad.

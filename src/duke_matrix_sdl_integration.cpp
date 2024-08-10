@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "Meteosource.h"
+#include <fstream>
+#include <iostream>
 
 using namespace rgb_matrix;
 
@@ -14,6 +16,14 @@ RGBMatrix *matrix;
 FrameCanvas *offscreen_canvas;
 rgb_matrix::Color time_color;
 rgb_matrix::Font font;
+
+struct Pixel
+{
+    unsigned char blue;
+    unsigned char green;
+    unsigned char red;
+};
+Pixel *background = NULL;
 
 int matrix_width, matrix_height;
 int surface_width, surface_height;
@@ -117,12 +127,66 @@ void *putDukeToSleep(void *arg)
     return NULL;
 }
 
-void SDL_on_InputEvent() {
+void SDL_on_InputEvent()
+{
     last_activity_time = clock();
-    if (is_game_sleeping) {
+    if (is_game_sleeping)
+    {
         is_game_sleeping = false;
         S_PauseSounds(false);
         S_PauseMusic(false);
+    }
+}
+
+void readBackgroundImageFile(char* image_path)
+{
+    std::ifstream file(image_path, std::ios::binary);
+    if (!file.is_open())
+    {
+        printf("Failed to read background image \n");
+        return;
+    }
+    else
+    {
+        // Read file header (54 bytes)
+        char header[54];
+        file.read(header, 54);
+        if(header[0] != 'B' && header[1] != 'M') {
+            printf("Warning: Only supports BMP format in background image \n");
+            return;
+        }
+        // Check pixel format (bits per pixel)
+        short bitsPerPixel = *(short *)&header[28];
+        if (bitsPerPixel != 24 && bitsPerPixel != 32)
+        {
+            printf("Warning: Only supports 24 bits per pixel in background image: %d \n", bitsPerPixel);
+            return;
+        }
+        // Read pixel data
+        int width = *(int *)&header[18];
+        int height = *(int *)&header[14];
+        int offset = *(int *)&header[10];
+        if (width != matrix_width) {
+            printf("Warning: Only supports width %d pixels width in background image, got: %d \n", matrix_width, width);
+            return;
+        }
+
+        file.seekg(offset);
+        // Read pixel data
+        for (int y = 0; y < height && y < surface_height / surface_to_matrix_ratio; ++y)
+        {
+            for (int x = 0; x < width && x < matrix_width; ++x)
+            {
+                Pixel &pixel = background[y * width + x];
+                file.read((char *)&pixel, bitsPerPixel / 8);
+                // Swap BGR to RGB (if needed)
+                if (bitsPerPixel == 24)
+                {
+                    std::swap(pixel.blue, pixel.red);
+                }
+            }
+        }
+        file.close();
     }
 }
 
@@ -130,7 +194,6 @@ void SDL_on_Init(int argc, char *argv[])
 {
     RGBMatrix::Options matrix_options;
     RuntimeOptions runtime_opt;
-
     ParseOptionsFromFlags(&argc, &argv, &matrix_options, &runtime_opt);
     matrix_width = 64;
     surface_width = 640;
@@ -162,6 +225,8 @@ void SDL_on_Init(int argc, char *argv[])
     const char *metsource_location_arg = "--metsource_location=";
     const char *sleep_timeout_arg = "--sleep_timeout_sec=";
     const char *refresh_timer_arg = "--refresh_weather_timer_sec=";
+    const char *background_image_arg = "--background-image-path=";
+    char* background_image_path;
     int i;
     for (i = 1; i < argc; i++)
     {
@@ -185,11 +250,21 @@ void SDL_on_Init(int argc, char *argv[])
             refresh_weather_timeout = atoi(argv[i] + strlen(refresh_timer_arg));
             printf("Data refresh timoeut: %d\n", refresh_weather_timeout);
         }
+        else if (strncmp(argv[i], background_image_arg, strlen(background_image_arg)) == 0)
+        {
+            background_image_path = argv[i] + strlen(background_image_arg);
+            printf("Background image path: %s\n", background_image_path);
+        }
     }
     temperature_forecast.isError = true;
     if (metsource_key && metsource_place_id)
     {
         meteosource = new Meteosource(metsource_key, "free", "https://www.meteosource.com/api");
+    }
+
+    background = new Pixel[matrix_height * matrix_height];
+    if (background_image_path) {
+        readBackgroundImageFile(background_image_path);
     }
 
     pthread_t refresh_thread_id;
@@ -225,7 +300,7 @@ void SDL_on_DrawFrame(uint32_t *pixels)
     {
         for (int x = 0; x < matrix_width; ++x)
         {
-            if (!is_game_sleeping && y < surface_height / 10)
+            if (false && !is_game_sleeping && y < surface_height / 10)
             {
                 uint8_t red = *pix >> 16;
                 uint8_t green = *pix >> 8;
@@ -235,7 +310,10 @@ void SDL_on_DrawFrame(uint32_t *pixels)
             }
             else
             {
-                offscreen_canvas->SetPixel(x, y, 0, 0, 0);
+                offscreen_canvas->SetPixel(x, y,
+                            background[y * matrix_width + x].red,
+                            background[y * matrix_width + x].green,
+                            background[y * matrix_width + x].blue);
             }
         }
     }
