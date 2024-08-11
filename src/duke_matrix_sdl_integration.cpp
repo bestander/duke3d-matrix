@@ -300,7 +300,7 @@ void SDL_on_DrawFrame(uint32_t *pixels)
     {
         for (int x = 0; x < matrix_width; ++x)
         {
-            if (false && !is_game_sleeping && y < surface_height / 10)
+            if (!is_game_sleeping && y < surface_height / 10)
             {
                 uint8_t red = *pix >> 16;
                 uint8_t green = *pix >> 8;
