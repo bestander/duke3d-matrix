@@ -59,9 +59,18 @@ Audio should be decently turn-key, but can take a little more work. It's not rec
 
 The binary accepts arguments for both [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix/tree/master) and [eduke32](https://github.com/bestander/eduke32), all the necessary params to run it on a double LED matrix on a Raspberry Pi3 are in script `run.sh`.
 
-If you want for the board to also show temperature forecast from [Meteosource](https://github.com/Meteosource/meteosource_cpp) you need to register on the website (free) and generate an API token and pass it to the run.sh script:
 
-`./run.sh --metsource_key=<my-api-key> --metsource_location=nocatee-7315235 --refresh_weather_timer_sec=3600`
+### NOAA Tides Prediction
+
+To display high tide predictions from NOAA Tides & Currents, pass the station ID using the `--noaa-tides-location` argument:
+
+`./run.sh --noaa-tides-location=8720218`
+
+Replace `8720218` with the NOAA station ID for your location (e.g., Jacksonville, FL Main Street Bridge).
+
+You can combine this with other arguments, for example:
+
+`./run.sh --metsource_key=<my-api-key> --metsource_location=nocatee-7315235 --refresh_weather_timer_sec=3600 --noaa-tides-location=8720218`
 
 If you don't want the game to play nonstop you can pass the following parameter to pause it if there is no gamepad activity.
 It will automatically wake up on any gamepad button click and when weather is refreshed. 
