@@ -47,10 +47,24 @@ Meteosource *meteosource;
 // Extract all high and low tides from NOAA JSON response (manual parsing)
 struct TideEvent
 {
-    std::string time;
+    time_t time;
     std::string type; // "H" or "L"
-    std::string value;
+    double value;
 };
+
+struct TideInfo
+{
+    bool isError;
+    std::vector<TideEvent> nextTides;
+};
+TideInfo tideInfo;
+
+// Basic Catmull-Rom spline interpolation for 1D points
+// p0, p1, p2, p3 are consecutive y-values, t in [0,1]
+double catmullRom(double p0, double p1, double p2, double p3, double t)
+{
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+}
 
 // Manual extraction of tide events from NOAA JSON response
 std::vector<TideEvent> extractTidesManual(const std::string &response)
@@ -66,12 +80,16 @@ std::vector<TideEvent> extractTidesManual(const std::string &response)
         size_t t_end = response.find('"', t_pos);
         if (t_end == std::string::npos)
             break;
-        std::string time = response.substr(t_pos, t_end - t_pos);
+        std::string time_str = response.substr(t_pos, t_end - t_pos);
+        struct tm tide_tm = {};
+        strptime(time_str.c_str(), "%Y-%m-%d %H:%M", &tide_tm);
+        tide_tm.tm_isdst = -1; // Let system determine DST
+        time_t tide_time = mktime(&tide_tm);
 
         size_t v_pos = response.find("\"v\":\"", t_end);
         if (v_pos == std::string::npos)
             break;
-        v_pos += 6;
+        v_pos += 5; // Move past "v":"
         size_t v_end = response.find('"', v_pos);
         if (v_end == std::string::npos)
             break;
@@ -86,7 +104,7 @@ std::vector<TideEvent> extractTidesManual(const std::string &response)
             break;
         std::string type = response.substr(type_pos, type_end - type_pos);
 
-        tides.push_back({time, type, value});
+        tides.push_back({tide_time, type, std::stod(value)});
         pos = type_end;
     }
     // Sort by time ascending
@@ -95,34 +113,6 @@ std::vector<TideEvent> extractTidesManual(const std::string &response)
     return tides;
 }
 
-// Get next tide event of given type ("H" or "L") in the future
-std::string getNextTideTime(const std::vector<TideEvent> &tides, const std::string &type)
-{
-    time_t now = time(0);
-    for (const auto &tide : tides)
-    {
-        if (tide.type == type)
-        {
-            struct tm tide_tm = {0};
-            strptime(tide.time.c_str(), "%Y-%m-%d %H:%M", &tide_tm);
-            time_t tide_time = mktime(&tide_tm);
-            if (difftime(tide_time, now) > 0)
-            {
-                return tide.time;
-            }
-        }
-    }
-    return "";
-}
-
-typedef struct
-{
-    bool isError;
-    std::string nextHighTide;
-    std::string nextLowTide;
-} TideInfo;
-
-TideInfo tideInfo;
 // Helper for HTTP GET using libcurl
 size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
@@ -148,7 +138,7 @@ std::string http_get(const std::string &url)
 
 TideInfo getNextHighTide(const std::string &stationId)
 {
-    TideInfo tideInfo = {true, "", ""};
+    TideInfo info = {true, {}};
     std::string url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=duke3d-matrix&begin_date=TODAY&end_date=TODAY&datum=MLLW&station=" + stationId + "&time_zone=lst_ldt&units=metric&interval=hilo&format=json";
     char dateStr[9];
     time_t now = time(0);
@@ -158,20 +148,12 @@ TideInfo getNextHighTide(const std::string &stationId)
 
     std::string response = http_get(url);
     if (response.empty())
-        return tideInfo;
+        return info;
 
-    // Use manual string parsing for now
-    printf("Next tide response: %s\n", response.c_str());
-
-    std::vector<TideEvent> tides = extractTidesManual(response);
-    if (!tides.empty())
-    {
-        tideInfo.isError = false;
-        tideInfo.nextHighTide = getNextTideTime(tides, "H");
-        tideInfo.nextLowTide = getNextTideTime(tides, "L");
-    }
-    printf("Next high tide response: %s\n", tideInfo.nextHighTide.c_str());
-    return tideInfo;
+    printf("Tide info response %s \n", response.c_str());
+    info.nextTides = extractTidesManual(response);
+    info.isError = false;
+    return info;
 }
 
 void getTide()
@@ -181,14 +163,10 @@ void getTide()
     {
         printf("Getting next high tide: %s\n", noaa_tides_location);
         tideInfo = getNextHighTide(std::string(noaa_tides_location));
-        if (!tideInfo.isError)
+        if (tideInfo.isError)
         {
-            printf("Next high tide: %s\n", tideInfo.nextHighTide.c_str());
+            printf("Failed to get next high tide\n");
         }
-    }
-    else
-    {
-        printf("Failed to get next high tide\n");
     }
 }
 typedef struct
@@ -451,6 +429,122 @@ void SDL_on_Init(int argc, char *argv[])
     }
 }
 
+void drawTideCurve()
+{
+    // Curve visualization for next 24 hours based on tide events
+    if (!tideInfo.isError)
+    {
+        // Gather all tide events (high and low) and their times
+        std::vector<std::pair<double, int>> tidePoints; // (hour offset, y value)
+        time_t raw_time;
+        time(&raw_time);
+        struct tm *info = localtime(&raw_time);
+        time_t now = mktime(info);
+        int wave_y_base = 56;
+        int wave_height = 8;
+        int wave_x_start = 36;
+        int wave_x_end = 64;
+
+        if (!tideInfo.nextTides.empty())
+        {
+            printf("Parsed tide events:\n");
+            for (const auto &te : tideInfo.nextTides)
+            {
+                char buf[32];
+                strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", localtime(&te.time));
+                printf("  time: %s, type: %s, value: %.3f\n", buf, te.type.c_str(), te.value);
+            }
+            double minHour = difftime(tideInfo.nextTides.front().time, now) / 3600.0;
+            double maxHour = minHour;
+
+            for (const auto &te : tideInfo.nextTides)
+            {
+                double hour = difftime(te.time, now) / 3600.0;
+                double y = te.value;
+                if (hour < minHour)
+                    minHour = hour;
+                if (hour > maxHour)
+                    maxHour = hour;
+            }
+
+            // Interpolate curve between tide points using linear segments
+            // Find the minimum hour offset for leftmost point
+            double minHourOffset = difftime(tideInfo.nextTides.front().time, now) / 3600.0;
+            double maxHourOffset = difftime(tideInfo.nextTides.back().time, now) / 3600.0;
+            double hourRange = maxHourOffset - minHourOffset;
+            if (hourRange == 0)
+                hourRange = 1; // Prevent division by zero
+
+            // Prepare arrays for interpolation
+            std::vector<double> hours, values;
+            for (const auto &tp : tideInfo.nextTides)
+            {
+                double hour = difftime(tp.time, now) / 3600.0;
+                hours.push_back(hour);
+                values.push_back(tp.value);
+            }
+            double minY = *std::min_element(values.begin(), values.end());
+            double maxY = *std::max_element(values.begin(), values.end());
+            if (maxY == minY)
+                maxY = minY + 1;
+
+            // Interpolate curve for each x using Catmull-Rom spline
+            int n = (int)hours.size();
+            for (int x = wave_x_start; x <= wave_x_end; ++x)
+            {
+                double rel = (double)(x - wave_x_start) / (wave_x_end - wave_x_start);
+                double hour = minHourOffset + rel * hourRange;
+                // Find segment for interpolation
+                int seg = 0;
+                while (seg + 1 < n && hours[seg + 1] < hour)
+                    ++seg;
+                // Clamp segment indices for spline
+                int i0 = std::max(seg - 1, 0);
+                int i1 = seg;
+                int i2 = std::min(seg + 1, n - 1);
+                int i3 = std::min(seg + 2, n - 1);
+                double h1 = hours[i1], h2 = hours[i2];
+                double t = (h2 - h1) == 0 ? 0 : (hour - h1) / (h2 - h1);
+                double y_val = catmullRom(values[i0], values[i1], values[i2], values[i3], t);
+                double y_norm = (y_val - minY) / (maxY - minY);
+                int y = wave_y_base - (int)(y_norm * wave_height);
+                offscreen_canvas->SetPixel(x, y, 255, 0, 0);
+            }
+
+            // Mark tide points as blue dots
+            for (size_t i = 0; i < hours.size(); ++i)
+            {
+                int x = wave_x_start + (int)(((hours[i] - minHourOffset) / hourRange) * (wave_x_end - wave_x_start));
+                double y_norm = (values[i] - minY) / (maxY - minY);
+                int y = wave_y_base - (int)(y_norm * wave_height);
+                offscreen_canvas->SetPixel(x, y, 255, 0, 0);
+            }
+
+            // Mark current time as green dot
+            int x_now = wave_x_start + (int)(((0 - minHourOffset) / hourRange) * (wave_x_end - wave_x_start));
+            // Interpolate y for current time
+            double y_now_val;
+            int seg_now = 0;
+            while (seg_now + 1 < (int)hours.size() && hours[seg_now + 1] < 0)
+                ++seg_now;
+            if (seg_now + 1 < (int)hours.size())
+            {
+                double h0 = hours[seg_now], h1 = hours[seg_now + 1];
+                double v0 = values[seg_now], v1 = values[seg_now + 1];
+                double t = (0 - h0) / (h1 - h0);
+                y_now_val = v0 + t * (v1 - v0);
+            }
+            else
+            {
+                y_now_val = values.back();
+            }
+            double y_now_norm = (y_now_val - minY) / (maxY - minY);
+            int y_now = wave_y_base - (int)(y_now_norm * wave_height);
+            offscreen_canvas->SetPixel(x_now, y_now, 0, 0, 255); // current time
+        }
+    }
+}
+
 void SDL_OverrideResolution(int *width, int *height)
 {
     *width = surface_width;
@@ -497,40 +591,7 @@ void SDL_on_DrawFrame(uint32_t *pixels)
         DrawText(offscreen_canvas, font, 0, 64, time_color, NULL, temp_message, 1);
     }
 
-    // Sine wave visualization for next 24 hours, peak at next high tide
-    if (!tideInfo.isError && !tideInfo.nextHighTide.empty())
-    {
-        struct tm tide_tm = {0};
-        strptime(tideInfo.nextHighTide.c_str(), "%Y-%m-%d %H:%M", &tide_tm);
-        time_t tide_time = mktime(&tide_tm);
-        time_t now = time(0);
-        double hours_to_tide = difftime(tide_time, now) / 3600.0;
-        printf("Hours to next high tide: %.2f\n", hours_to_tide);
-        strftime(time_buffer, 20, "%H:%M", info);
-
-        int wave_x_start = 36;
-        int wave_x_end = 64;
-        int wave_y_base = 54; // Y position for wave
-        int wave_height = 8;  // Amplitude
-        int wave_y_min = wave_y_base - wave_height / 2;
-        int wave_y_max = wave_y_base + wave_height / 2;
-
-        // For each X pixel in the range, map to hour in next 24h
-        for (int x = wave_x_start; x < wave_x_end; ++x)
-        {
-            double hour = (double)(x - wave_x_start) * 24.0 / (wave_x_end - wave_x_start);
-            // Sine phase: peak at high tide
-            double phase = M_PI * (hour - hours_to_tide) / 12.0; // 12h period
-            double value = sin(phase);
-            int y = wave_y_base - (int)(value * (wave_height / 2));
-            // Clamp y
-            if (y < wave_y_min)
-                y = wave_y_min;
-            if (y > wave_y_max)
-                y = wave_y_max;
-            offscreen_canvas->SetPixel(x, y, 255, 0, 0); // Blue wave
-        }
-    }
+    drawTideCurve();
 
     offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas);
 }
