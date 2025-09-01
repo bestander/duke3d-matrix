@@ -586,8 +586,8 @@ void SDL_on_DrawFrame(uint32_t *pixels)
 
     if (!temperature_forecast.isError)
     {
-        char temp_message[20];
-        sprintf(temp_message, "%.1f° - %.1f°", temperature_forecast.min, temperature_forecast.max);
+        char temp_message[32];
+        snprintf(temp_message, sizeof(temp_message), "%.1f° - %.1f°", temperature_forecast.min, temperature_forecast.max);
         DrawText(offscreen_canvas, font, 0, 64, time_color, NULL, temp_message, 1);
     }
 
